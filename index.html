@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>stash</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --line: #e6e8ec;
+    --text: #1f2329;
+    --muted: #7b8494;
+    --accent: #4d6bfe;
+    --accent-soft: #eef1ff;
+    --hover: #f2f4f8;
+    --danger: #d63b3b;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1014;
+      --panel: #161920;
+      --line: #262b35;
+      --text: #e6e8ee;
+      --muted: #8b94a5;
+      --accent: #7b93ff;
+      --accent-soft: #1c2340;
+      --hover: #1c2029;
+      --danger: #ff6b6b;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 13.5px/1.55 "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    flex: 0 0 auto;
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+  .brand b { font-size: 16px; letter-spacing: .2px; }
+  .repo { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .actions { display: flex; align-items: center; gap: 8px; }
+  .status { color: var(--muted); font-size: 12px; margin-right: 4px; }
+  .status.err { color: var(--danger); }
+  button {
+    font: inherit;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 5px 12px;
+    cursor: pointer;
+    transition: background .12s ease, border-color .12s ease;
+  }
+  button:hover { background: var(--hover); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { filter: brightness(1.06); }
+  button.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+  button.ghost:hover { background: var(--hover); color: var(--text); }
+  main { flex: 1 1 auto; display: grid; grid-template-columns: 320px 1fr; min-height: 0; }
+  aside {
+    border-right: 1px solid var(--line);
+    background: var(--panel);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .searchbar { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .searchbar input {
+    width: 100%;
+    font: inherit;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 6px 10px;
+    outline: none;
+  }
+  .searchbar input:focus { border-color: var(--accent); }
+  #list { overflow: auto; padding: 6px 0 14px; }
+  .group { padding: 10px 14px 4px; font-size: 11.5px; color: var(--muted); text-transform: none; letter-spacing: .3px; }
+  .item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 6px 14px;
+    cursor: pointer;
+    border-left: 2px solid transparent;
+  }
+  .item:hover { background: var(--hover); }
+  .item.active { background: var(--accent-soft); border-left-color: var(--accent); }
+  .item .ico { width: 16px; text-align: center; opacity: .85; flex: 0 0 auto; }
+  .item .nm { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .sz { color: var(--muted); font-size: 11.5px; flex: 0 0 auto; }
+  section#preview { min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+  .preview-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+    flex: 0 0 auto;
+    min-height: 46px;
+  }
+  .preview-head .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .preview-head .meta { color: var(--muted); font-size: 12px; flex: 1 1 auto; }
+  .preview-body { flex: 1 1 auto; overflow: auto; padding: 18px 22px; }
+  pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font: 12.8px/1.65 "Cascadia Code", "Consolas", "SFMono-Regular", monospace;
+    color: var(--text);
+  }
+  .empty { color: var(--muted); display: grid; place-items: center; height: 100%; font-size: 13px; }
+  .card {
+    max-width: 460px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    background: var(--panel);
+  }
+  .card h3 { margin: 0 0 6px; font-size: 14px; }
+  .card p { margin: 0 0 14px; color: var(--muted); font-size: 12.5px; }
+  .modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(12, 14, 18, .42);
+    display: none;
+    place-items: center;
+    z-index: 40;
+    backdrop-filter: blur(2px);
+  }
+  .modal.show { display: grid; }
+  .modal-box {
+    width: min(560px, 92vw);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: 0 18px 50px rgba(15, 20, 30, .22);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .modal-box h3 { margin: 0; font-size: 15px; }
+  .modal-box input,
+  .modal-box textarea {
+    font: inherit;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    outline: none;
+    width: 100%;
+  }
+  .modal-box textarea {
+    height: 220px;
+    resize: vertical;
+    font: 13px/1.6 "Cascadia Code", "Consolas", monospace;
+  }
+  .modal-box input:focus,
+  .modal-box textarea:focus { border-color: var(--accent); }
+  .modal-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+  .modal-actions .hint { flex: 1 1 auto; color: var(--muted); font-size: 11.5px; }
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 22px;
+    transform: translate(-50%, 8px);
+    background: rgba(24, 27, 34, .94);
+    color: #fff;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease;
+    z-index: 20;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .toast.err { background: rgba(160, 36, 36, .95); }
+  .drop-hint {
+    position: fixed;
+    inset: 0;
+    background: rgba(77, 107, 254, .08);
+    border: 2px dashed var(--accent);
+    display: none;
+    place-items: center;
+    color: var(--accent);
+    font-size: 15px;
+    z-index: 30;
+    pointer-events: none;
+  }
+  .drop-hint.on { display: grid; }
+  @media (max-width: 760px) {
+    main { grid-template-columns: 1fr; }
+    aside { border-right: none; border-bottom: 1px solid var(--line); max-height: 45vh; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <b>stash</b>
+    <span class="repo" id="repo">…</span>
+  </div>
+  <div class="actions">
+    <span class="status" id="status">连接中…</span>
+    <button id="refresh" title="立即刷新">刷新</button>
+    <button id="clip">发文本</button>
+    <button id="upload" class="primary">上传</button>
+    <input type="file" id="file" multiple hidden>
+  </div>
+</header>
+
+<main>
+  <aside>
+    <div class="searchbar">
+      <input id="search" placeholder="搜索文件名…" autocomplete="off">
+    </div>
+    <div id="list"></div>
+  </aside>
+  <section id="preview">
+    <div class="empty">从左边选一个文件</div>
+  </section>
+</main>
+
+<div class="modal" id="modal">
+  <div class="modal-box">
+    <h3>发送文本</h3>
+    <input id="clipTitle" placeholder="标题（可选，留空用时间命名）" autocomplete="off">
+    <textarea id="clipBody" placeholder="粘贴或输入要传的文字，Ctrl+Enter 发送"></textarea>
+    <div class="modal-actions">
+      <span class="hint">另一台电脑打开就能看、能复制</span>
+      <button id="clipCancel" class="ghost">取消</button>
+      <button id="clipSend" class="primary">发送</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="setup">
+  <div class="modal-box">
+    <h3>连接你的 GitHub 仓库</h3>
+    <p class="hint">token 只写在本机的 config.json，不会上传到任何地方。建议用一个只有该仓库 Contents 读写权限的细粒度 token。</p>
+    <input id="sOwner" placeholder="GitHub 用户名，例如 octocat" autocomplete="off">
+    <input id="sRepo" placeholder="仓库名，例如 stash" autocomplete="off">
+    <input id="sBranch" placeholder="分支，默认 main" autocomplete="off">
+    <input id="sToken" type="password" placeholder="Personal Access Token" autocomplete="off">
+    <div class="modal-actions">
+      <a class="hint" href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noreferrer">怎么生成 token？</a>
+      <button id="sGo" class="primary">连接</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="drop-hint" id="drop">松手上传到 stash</div>
+
+<script>
+const $ = (s) => document.querySelector(s)
+const fmt = (n) => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : n > 1024 ? Math.round(n / 1024) + ' KB' : n + ' B'
+const icon = (f) => {
+  const e = f.path.split('.').pop().toLowerCase()
+  if (f.text) return '📄'
+  if (['png','jpg','jpeg','gif','webp','svg','bmp'].includes(e)) return '🖼'
+  if (['zip','7z','rar','tar','gz'].includes(e)) return '📦'
+  if (['mp4','mkv','mov','avi'].includes(e)) return '🎬'
+  if (['mp3','wav','flac','m4a'].includes(e)) return '🎵'
+  return '📎'
+}
+
+let files = []
+let active = null
+let timer = 0
+
+function toast(msg, isErr) {
+  const t = $('#toast')
+  t.textContent = msg
+  t.className = 'toast show' + (isErr ? ' err' : '')
+  clearTimeout(t._h)
+  t._h = setTimeout(() => { t.className = 'toast' }, 2400)
+}
+
+function setStatus(text, isErr) {
+  const s = $('#status')
+  s.textContent = text
+  s.className = 'status' + (isErr ? ' err' : '')
+}
+
+function renderList() {
+  const q = $('#search').value.trim().toLowerCase()
+  const list = $('#list')
+  const shown = files.filter(f => !q || f.path.toLowerCase().includes(q))
+  if (!shown.length) {
+    list.innerHTML = '<div class="empty" style="height:120px">' + (q ? '没有匹配的文件' : '仓库还是空的') + '</div>'
+    return
+  }
+  const groups = new Map()
+  for (const f of shown) {
+    const dir = f.dir || '(根目录)'
+    if (!groups.has(dir)) groups.set(dir, [])
+    groups.get(dir).push(f)
+  }
+  let html = ''
+  for (const [dir, items] of groups) {
+    html += `<div class="group">${dir}/</div>`
+    for (const f of items) {
+      const on = active && active.path === f.path ? ' active' : ''
+      html += `<div class="item${on}" data-path="${encodeURIComponent(f.path)}">
+        <span class="ico">${icon(f)}</span>
+        <span class="nm" title="${f.path}">${f.name}</span>
+        <span class="sz">${fmt(f.size)}</span>
+      </div>`
+    }
+  }
+  list.innerHTML = html
+}
+
+async function loadList(silent) {
+  try {
+    const r = await fetch('/api/list')
+    const d = await r.json()
+    if (d.error) throw new Error(d.error)
+    files = d.files
+    $('#repo').textContent = d.branch ? `${d.branch} · ${files.length} 个文件` : ''
+    renderList()
+    const now = new Date()
+    setStatus('已同步 ' + now.toTimeString().slice(0, 5))
+  } catch (e) {
+    setStatus('连接失败', true)
+    if (!silent) toast(e.message || '无法读取仓库', true)
+  }
+}
+
+// tree API 有缓存，上传后轮询几次直到列表里出现该文件
+async function refreshUntil(path, tries = 4) {
+  for (let i = 0; i < tries; i++) {
+    await loadList(true)
+    if (files.some(x => x.path === path)) return
+    await new Promise(r => setTimeout(r, 1200))
+  }
+}
+
+async function openFile(f) {
+  active = f
+  renderList()
+  const head = `<div class="preview-head">
+      <span class="ico">${icon(f)}</span>
+      <span class="name">${f.name}</span>
+      <span class="meta">${f.path} · ${fmt(f.size)}${f.text ? '' : ' · 二进制文件'}</span>
+      ${f.text ? '<button id="cp" class="ghost" title="复制全文">复制</button>' : ''}
+      <button id="del" class="ghost" title="从仓库删除">删除</button>
+      <button id="dl">下载</button>
+    </div>`
+  if (!f.text) {
+    $('#preview').innerHTML = head + `<div class="preview-body"><div class="card">
+      <h3>${f.name}</h3>
+      <p>这是一个非文本文件，客户端不会自动下载。<br>需要时点「下载」，会保存到你的下载目录。</p>
+      <button id="dl2" class="primary">下载 ${fmt(f.size)}</button>
+    </div></div>`
+    bindActions(f)
+    return
+  }
+  $('#preview').innerHTML = head + '<div class="preview-body"><div class="empty">读取中…</div></div>'
+  bindActions(f)
+  try {
+    const r = await fetch('/api/text?path=' + encodeURIComponent(f.path))
+    const d = await r.json()
+    if (d.error) throw new Error(d.error)
+    if (d.too_large) {
+      $('#preview').querySelector('.preview-body').innerHTML =
+        `<div class="card"><h3>文件太大</h3><p>${fmt(d.size)} 超过预览上限，请直接下载。</p></div>`
+      return
+    }
+    const esc = d.text.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    $('#preview').querySelector('.preview-body').innerHTML = `<pre>${esc}</pre>`
+  } catch (e) {
+    $('#preview').querySelector('.preview-body').innerHTML =
+      `<div class="card"><h3>读取失败</h3><p>${e.message}</p></div>`
+  }
+}
+
+function bindActions(f) {
+  const dl = () => { window.location.href = '/api/download?path=' + encodeURIComponent(f.path) }
+  const del = async () => {
+    if (!confirm(`从仓库删除 ${f.path}？`)) return
+    try {
+      const r = await fetch('/api/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: f.path })
+      })
+      const d = await r.json()
+      if (d.error) throw new Error(d.error)
+      toast('已删除')
+      active = null
+      $('#preview').innerHTML = '<div class="empty">从左边选一个文件</div>'
+      await loadList(true)
+    } catch (e) { toast(e.message, true) }
+  }
+  const cp = $('#cp')
+  if (cp) cp.onclick = async () => {
+    const pre = $('#preview').querySelector('pre')
+    if (!pre) return toast('内容还没加载完', true)
+    try {
+      await navigator.clipboard.writeText(pre.textContent)
+      toast('已复制')
+    } catch {
+      toast('复制失败，请手动选择', true)
+    }
+  }
+  const a = $('#dl'); if (a) a.onclick = dl
+  const b = $('#dl2'); if (b) b.onclick = dl
+  const c = $('#del'); if (c) c.onclick = del
+}
+
+$('#list').addEventListener('click', (ev) => {
+  const item = ev.target.closest('.item')
+  if (!item) return
+  const path = decodeURIComponent(item.dataset.path)
+  const f = files.find(x => x.path === path)
+  if (f) openFile(f)
+})
+
+$('#search').addEventListener('input', renderList)
+$('#refresh').onclick = () => loadList(false)
+$('#upload').onclick = () => $('#file').click()
+
+$('#file').onchange = async (ev) => {
+  const picked = [...ev.target.files]
+  ev.target.value = ''
+  for (const f of picked) await uploadOne(f)
+}
+
+async function uploadOne(file) {
+  const isText = /\.(md|txt|json|py|js|ts|html|css|ya?ml|toml|csv|log|ini|sh|bat)$/i.test(file.name)
+  const dir = isText ? 'notes' : 'files'
+  const path = dir + '/' + file.name
+  const buf = await file.arrayBuffer()
+  let bin = ''
+  const bytes = new Uint8Array(buf)
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000))
+  }
+  const b64 = btoa(bin)
+  try {
+    const r = await fetch('/api/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, content: b64 })
+    })
+    const d = await r.json()
+    if (d.error) throw new Error(d.error)
+    toast(`已上传到 ${path}`)
+    await refreshUntil(path)
+  } catch (e) {
+    toast(e.message, true)
+    await loadList(true)
+  }
+}
+
+// 拖拽上传
+let dragDepth = 0
+window.addEventListener('dragenter', (e) => { e.preventDefault(); dragDepth++; $('#drop').classList.add('on') })
+window.addEventListener('dragleave', (e) => { e.preventDefault(); if (--dragDepth <= 0) $('#drop').classList.remove('on') })
+window.addEventListener('dragover', (e) => e.preventDefault())
+window.addEventListener('drop', async (e) => {
+  e.preventDefault()
+  dragDepth = 0
+  $('#drop').classList.remove('on')
+  const dropped = [...e.dataTransfer.files]
+  for (const f of dropped) await uploadOne(f)
+})
+
+// ---- 发文本（粘贴即传输）----
+const modal = $('#modal')
+function openClip() {
+  $('#clipTitle').value = ''
+  $('#clipBody').value = ''
+  modal.classList.add('show')
+  setTimeout(() => $('#clipBody').focus(), 30)
+}
+function closeClip() { modal.classList.remove('show') }
+
+async function sendClip() {
+  const text = $('#clipBody').value
+  if (!text.trim()) return toast('内容是空的', true)
+  const raw = $('#clipTitle').value.trim() || new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+  const safe = raw.replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 60)
+  const path = 'notes/clip/' + safe + (safe.endsWith('.txt') ? '' : '.txt')
+  const bytes = new TextEncoder().encode(text)
+  let bin = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000))
+  try {
+    const r = await fetch('/api/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, content: btoa(bin), message: 'text: ' + path })
+    })
+    const d = await r.json()
+    if (d.error) throw new Error(d.error)
+    closeClip()
+    toast('已发送到 ' + path)
+    openFile({
+      path,
+      name: path.split('/').pop(),
+      dir: path.slice(0, path.lastIndexOf('/')),
+      size: bytes.length,
+      text: true
+    })
+    await refreshUntil(path)
+  } catch (e) { toast(e.message, true) }
+}
+
+$('#clip').onclick = openClip
+$('#clipCancel').onclick = closeClip
+$('#clipSend').onclick = sendClip
+$('#clipBody').addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); sendClip() }
+})
+modal.addEventListener('click', (e) => { if (e.target === modal) closeClip() })
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeClip() })
+
+async function boot() {
+  try {
+    const r = await fetch('/api/status')
+    const st = await r.json()
+    if (!st.configured) {
+      $('#sOwner').value = st.owner || ''
+      $('#sRepo').value = st.repo || ''
+      $('#sBranch').value = st.branch || 'main'
+      $('#setup').classList.add('show')
+      setStatus('未配置', true)
+      return
+    }
+    $('#repo').textContent = `${st.owner}/${st.repo} · ${st.branch}`
+    loadList(false)
+  } catch (e) {
+    setStatus('服务未启动', true)
+  }
+}
+
+$('#sGo').onclick = async () => {
+  const btn = $('#sGo')
+  btn.disabled = true
+  btn.textContent = '连接中…'
+  try {
+    const r = await fetch('/api/setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        owner: $('#sOwner').value.trim(),
+        repo: $('#sRepo').value.trim(),
+        branch: $('#sBranch').value.trim() || 'main',
+        token: $('#sToken').value.trim()
+      })
+    })
+    const d = await r.json()
+    if (d.error) throw new Error(d.error)
+    $('#setup').classList.remove('show')
+    toast('连接成功')
+    $('#repo').textContent = `${d.owner}/${d.repo} · ${d.branch}`
+    await loadList(false)
+  } catch (e) {
+    toast(e.message, true)
+  } finally {
+    btn.disabled = false
+    btn.textContent = '连接'
+  }
+}
+
+boot()
+timer = setInterval(() => { if (!document.hidden) loadList(true) }, 30000)
+document.addEventListener('visibilitychange', () => { if (!document.hidden) loadList(true) })
+</script>
+</body>
+</html>
